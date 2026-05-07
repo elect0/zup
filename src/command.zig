@@ -36,14 +36,14 @@ pub fn parseCommand(allocator: std.mem.Allocator, reader: *Reader) !Command {
     }
 
     var it = std.mem.tokenizeAny(u8, line, " \t\r");
-    while(it.next()) |token| {
+    while (it.next()) |token| {
         const dupe = try allocator.dupe(u8, token);
         try args.append(allocator, dupe);
     }
 
-    if(args.items.len == 0) return error.EmptyCommand;
+    if (args.items.len == 0) return error.EmptyCommand;
 
-    return .{.args = try args.toOwnedSlice(allocator)};
+    return .{ .args = try args.toOwnedSlice(allocator) };
 }
 
 test "parser: basic ls command" {
@@ -60,3 +60,4 @@ test "parser: basic ls command" {
     try testing.expectEqualStrings("ls", command.getArg(0));
     try testing.expectEqualStrings("/home/edu", command.getArg(2));
 }
+

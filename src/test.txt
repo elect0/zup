@@ -1,0 +1,47 @@
+t Context = enum { normal, sq, dq, arithmetic, dollar_sq, var_s_1, var_s_2, var_s_normal, dbracket, comment, backtick };
+
+pub const TokenType = enum {
+    eof,
+    newline,
+    word, // e.g: "ls"
+
+    pipe, // |
+    ampersand, // &
+    semi, // ;
+    d_semi, // ;;
+    logic_and, // &&
+    logic_or, // ||
+
+    l_paren, // (
+    r_paren, // )
+    d_lparen, // ((
+    d_rparen, // ))
+    d_lbracket, // [[
+    d_rbracket, // ]]
+    l_brace, // {
+    r_brace, // }
+
+    redirect_in, // <
+    redirect_out, // >,
+    append_out, // >>,
+    heredoc, // <<,
+    heredoc_strip, // <<- (scote tab-urile, specific shell)
+    redir_out_force, // >|
+    dup_in, // <&
+    dup_out, // >&
+
+    k_if,
+    k_then,
+    k_else,
+    k_elif,
+    k_fi,
+    k_for,
+    k_while,
+    k_until,
+    k_do,
+    k_done,
+    k_case,
+    k_easc,
+    k_in,
+}
+pana acum?

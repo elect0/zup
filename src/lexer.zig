@@ -298,19 +298,34 @@ pub const Lexer = struct {
                         },
                     }
                 },
+                .sq => {
+                    self.pos += 1;
+                    while (self.pos < self.input.len) : (self.pos += 1) {
+                        if (self.input[self.pos] == '\'') {
+                            _ = self.stack.pop();
+                            context = self.stack.getLast() orelse .base;
+                            self.pos += 1;
+
+                            std.debug.print("String: {s}\n", .{self.input[start..self.pos]});
+                            break;
+                        }
+                    }
+
+                    continue;
+                },
                 else => std.debug.print("Woops!\n", .{}),
             }
 
-            const word = self.input[start..self.pos];
-
-            if (keywords.get(word)) |keyword| {
-                return .{ .tag = keyword, .text = word };
-            }
-
-            return .{ .tag = .word, .text = word };
+            break;
         }
 
-        return .{ .tag = .word, .text = "" };
+        const word = self.input[start..self.pos];
+
+        if (keywords.get(word)) |keyword| {
+            return .{ .tag = keyword, .text = word };
+        }
+
+        return .{ .tag = .word, .text = word };
     }
 
     fn peek(self: *Lexer, offset: usize) ?u8 {

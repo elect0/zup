@@ -21,6 +21,9 @@ pub fn main(init: std.process.Init) !void {
         const stdin = &stdin_reader.interface;
         const stdout = &stdout_writer.interface;
 
+        try stdout.print("> ", .{});
+        try stdout.flush();
+
         var command = Command.parseCommand(gpa, stdin) catch |err| {
             std.debug.print("Failed to parse command: {}\n", .{err});
             continue;

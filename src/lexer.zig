@@ -311,11 +311,78 @@ pub const Lexer = struct {
                         }
                     }
 
+                    if (token == .sq) {
+                        return error.TokenIncomplete;
+                    }
+
+                    continue;
+                },
+                .dq => {
+                    self.pos += 1;
+                    while (self.pos < self.input.len) : (self.pos += 1) {
+                        switch (self.input[self.pos]) {
+                            '$' => {
+                                if (self.peek(1)) |c| {
+                                    switch (c) {
+                                        '(' => {
+                                            if (self.peek(2) == '(') {
+                                                context = .arithmetic;
+                                                try self.stack.append(allocator, context);
+                                            } else {
+                                            	context = .subshell;
+                                            	try self.stack.append(allocator, context);
+											}
+                                            break;
+                                        },
+                                        '{' => {
+                                            context = .vs_1;
+                                            try self.stack.append(allocator, context);
+                                            break;
+                                        },
+                                        '\'' => {
+                                            context = .dollar_sq;
+                                            try self.stack.append(allocator, context);
+                                            break;
+                                        },
+                                        else => {},
+                                    }
+                                }
+                            },
+                            '`' => {
+                                context = .backtick;
+                                try self.stack.append(allocator, context);
+                                break;
+                            },
+                            '\\' => {
+                                if (self.peek(1)) |c| {
+                                    switch (c) {
+                                        '$', '\\', '`', '\"' => {
+                                            self.pos += 1;
+                                            continue;
+                                        },
+                                        else => {},
+                                    }
+                                } else {
+                                    return error.TokenIncomplete;
+                                }
+                            },
+                            '\"' => {
+                                _ = self.stack.pop();
+                                context = self.stack.getLast() orelse .base;
+                                break;
+                            },
+                            else => {},
+                        }
+                    }
+
+                    if (context == .dq) {
+                        return error.TokenIncomplete;
+                    }
+
                     continue;
                 },
                 else => std.debug.print("Woops!\n", .{}),
             }
-
             break;
         }
 
@@ -343,7 +410,7 @@ fn isWhitespace(c: u8) bool {
 
 test "basic test" {
     const gpa = testing.allocator;
-    const input = "ls -la --color=auto";
+    const input = "echo \"salut";
 
     var lexer: Lexer = try .init(gpa, input);
     defer lexer.deinit(gpa);

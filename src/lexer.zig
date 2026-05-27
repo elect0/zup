@@ -104,81 +104,45 @@ pub const Lexer = struct {
 
         while (self.pos < self.input.len) {
             const char = self.input[self.pos];
-
+            context = self.stack.getLast() orelse .base;
+			
             switch (context) {
                 .base => {
                     switch (char) {
+                    	' ', '\n', '\t', '\r' => {
+                    		if (self.pos > start) break;
+                    	},
                         '\'' => {
-                            context = .sq;
-                            try self.stack.append(allocator, context);
-                            continue;
+                        	self.pos += 1;
+                            try self.stack.append(allocator, .sq);
                         },
                         '\"' => {
-                            context = .dq;
-                            try self.stack.append(allocator, context);
-                            continue;
+                        	self.pos += 1;
+                            try self.stack.append(allocator, .dq);
                         },
                         '$' => {
                             if (self.peek(1)) |c| {
+                            	self.pos += 1;
                                 switch (c) {
                                     '(' => {
-                                        if (self.peek(2) == '(') {
-                                            context = .arithmetic;
-                                            try self.stack.append(allocator, context);
-                                            continue;
-                                        }
-
-                                        var depth_counter: i32 = 1;
-
-                                        while (self.pos < self.input.len) : (self.pos += 1) {
-                                            if (self.input[self.pos] == '(') {
-                                                depth_counter += 1;
-                                            }
-
-                                            if (self.input[self.pos] == ')') {
-                                                depth_counter -= 1;
-                                            }
-                                        }
-
-                                        if (depth_counter != 0) {
-                                            return error.UnclosedParen;
-                                        }
-
-                                        return .{ .tag = .word, .text = self.input[start..self.pos] };
+                                    	self.pos += 1;
+                                        if (self.peek(1) == '(') {
+                                        	self.pos += 1;
+                                            try self.stack.append(allocator, .arithmetic);
+                                        } else {
+											try self.stack.append(allocator, .subshell);
+										}
                                     },
                                     '{' => {
-                                        context = .vs_1;
-                                        try self.stack.append(allocator, context);
-                                        continue;
+                                    	self.pos += 1;
+                                        try self.stack.append(allocator, .vs_1);
                                     },
                                     '\'' => {
-                                        context = .dollar_sq;
-                                        try self.stack.append(allocator, context);
-                                        continue;
+                                    	self.pos += 1;
+                                        try self.stack.append(allocator, .dollar_sq);
                                     },
                                     else => {
-                                        while (self.pos < self.input.len) : (self.pos += 1) {
-                                            switch (self.input[self.pos]) {
-                                                '&',
-                                                '<',
-                                                '>',
-                                                '|',
-                                                ';',
-                                                ' ',
-                                                '\n',
-                                                '\t',
-                                                '\r',
-                                                '(',
-                                                => {
-                                                    const word = self.input[start..self.pos];
-                                                    return .{ .tag = .word, .text = word };
-                                                },
-                                                '\'', '\"' => {
-                                                    break;
-                                                },
-                                                else => {},
-                                            }
-                                        }
+                                    	self.pos += 1;
                                     },
                                 }
                             } else {
@@ -187,26 +151,29 @@ pub const Lexer = struct {
                         },
                         '|' => {
                             if (self.peek(1) == '|') {
-                                self.pos += 1;
+                                self.pos += 2;
                                 return .{ .tag = .logic_or, .text = self.input[start..self.pos] };
                             }
 
+                            self.pos += 1;
                             return .{ .tag = .pipe, .text = "|" };
                         },
                         '&' => {
                             if (self.peek(1) == '&') {
-                                self.pos += 1;
+                                self.pos += 2;
                                 return .{ .tag = .logic_and, .text = self.input[start..self.pos] };
                             }
 
+                            self.pos += 1;
                             return .{ .tag = .ampersand, .text = "&" };
                         },
                         ';' => {
                             if (self.peek(1) == ';') {
-                                self.pos += 1;
+                                self.pos += 2;
                                 return .{ .tag = .d_semi, .text = self.input[start..self.pos] };
                             }
 
+							self.pos += 1;
                             return .{ .tag = .semi, .text = ";" };
                         },
                         '(' => {
@@ -279,111 +246,79 @@ pub const Lexer = struct {
                         },
                         ')', ']', '}' => return error.Unexpected,
                         else => {
-                            while (self.pos < self.input.len) {
-                                switch (self.input[self.pos]) {
-                                    ' ', '\n', '\r', '\t', '|', ';', '&', '<', '>', '\'', '\"', '$', '`' => {
-                                        break;
-                                    },
-                                    else => {
-                                        self.pos += 1;
-                                    },
-                                }
-                            }
-
-                            const c = self.input[self.pos - 1];
-
-                            if (c == '\'' or c == '\"' or c == '$' or c == '`') {
-                                continue;
-                            }
+                        	self.pos += 1;
                         },
                     }
                 },
                 .sq => {
+                	if (char == '\'') {
+                		_ = self.stack.pop();
+                	}
+
                     self.pos += 1;
-                    while (self.pos < self.input.len) : (self.pos += 1) {
-                        if (self.input[self.pos] == '\'') {
-                            _ = self.stack.pop();
-                            context = self.stack.getLast() orelse .base;
-                            self.pos += 1;
-
-                            std.debug.print("String: {s}\n", .{self.input[start..self.pos]});
-                            break;
-                        }
-                    }
-
-                    if (token == .sq) {
-                        return error.TokenIncomplete;
-                    }
-
-                    continue;
                 },
                 .dq => {
-                    self.pos += 1;
-                    while (self.pos < self.input.len) : (self.pos += 1) {
-                        switch (self.input[self.pos]) {
-                            '$' => {
-                                if (self.peek(1)) |c| {
-                                    switch (c) {
-                                        '(' => {
-                                            if (self.peek(2) == '(') {
-                                                context = .arithmetic;
-                                                try self.stack.append(allocator, context);
-                                            } else {
-                                            	context = .subshell;
-                                            	try self.stack.append(allocator, context);
-											}
-                                            break;
-                                        },
-                                        '{' => {
-                                            context = .vs_1;
-                                            try self.stack.append(allocator, context);
-                                            break;
-                                        },
-                                        '\'' => {
-                                            context = .dollar_sq;
-                                            try self.stack.append(allocator, context);
-                                            break;
-                                        },
-                                        else => {},
-                                    }
-                                }
-                            },
-                            '`' => {
-                                context = .backtick;
-                                try self.stack.append(allocator, context);
-                                break;
-                            },
-                            '\\' => {
-                                if (self.peek(1)) |c| {
-                                    switch (c) {
-                                        '$', '\\', '`', '\"' => {
-                                            self.pos += 1;
-                                            continue;
-                                        },
-                                        else => {},
-                                    }
-                                } else {
-                                    return error.TokenIncomplete;
-                                }
-                            },
-                            '\"' => {
-                                _ = self.stack.pop();
-                                context = self.stack.getLast() orelse .base;
-                                break;
-                            },
-                            else => {},
-                        }
-                    }
+                    switch(char) {
+                    	'$' => {
+                    		if (self.peek(1)) |c| {
+                    			self.pos += 1;
+                    			switch(c) {
+                    				'(' => {
+                    					self.pos += 1;
 
-                    if (context == .dq) {
-                        return error.TokenIncomplete;
+                    					if(self.peek(1) == '(') {
+                    						self.pos += 1;
+                    						try self.stack.append(allocator, .arithmetic);
+                    					} else {
+                    						try self.stack.append(allocator, .subshell);
+                    					}
+                    				},
+                    				'{' => {
+                    					self.pos += 1;
+                    					try self.stack.append(allocator, .vs_1);
+                    				},
+                    				'\"' => {
+                    					_ = self.stack.pop();
+                    					self.pos += 1;
+                    				},
+                    				else => {
+                    					self.pos += 1;
+                    				}
+                    			}
+                    		}
+                    	},
+                    	'\"' => {
+                    		self.pos += 1;
+                    		_ = self.stack.pop();
+                    	},
+                    	'`' => {
+                    		self.pos += 1;
+                    		try self.stack.append(allocator, .backtick);
+                    	}, 
+                    	'\\' => {
+                    		self.pos += 1;
+                    		if(self.peek(1)) |c| {
+                    			switch (c) {
+                    				'$', '\\', '`', '\"' => {
+                    					self.pos += 1;
+                    				},
+                    				else => {}
+                    			}
+                    		}
+                    	},
+                    	else => {
+                    		self.pos += 1;
+                    	}
                     }
-
-                    continue;
                 },
                 else => std.debug.print("Woops!\n", .{}),
             }
-            break;
+        }
+
+        const finalContext = self.stack.getLast() orelse .base;
+
+        if(finalContext != .base) {
+        	return error.TokenIncomplete;
         }
 
         const word = self.input[start..self.pos];
@@ -410,7 +345,7 @@ fn isWhitespace(c: u8) bool {
 
 test "basic test" {
     const gpa = testing.allocator;
-    const input = "echo \"salut";
+    const input = "ls --la --color=auto || grep \"test\"";
 
     var lexer: Lexer = try .init(gpa, input);
     defer lexer.deinit(gpa);
